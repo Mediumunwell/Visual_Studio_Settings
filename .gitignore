@@ -1,0 +1,8 @@
+# Don't commit VS Code caches
+**/workspaceStorage/
+**/globalStorage/
+**/History/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db

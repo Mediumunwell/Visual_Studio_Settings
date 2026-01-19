@@ -1,0 +1,28 @@
+{
+    "files.autoSave": "afterDelay",
+    "files.exclude": {
+        "**/.android": true,
+        "**/.atom": true,
+        "**/.cache": true,
+        "**/.conda": true,
+        "**/.config": true,
+        "**/.dotnet": true,
+        "**/.ipynb_checkpoints": true,
+        "**/.ipython": true,
+        "**/.junique": true,
+        "**/.jupyter": true,
+        "**/.Ld2VirtualBox": true,
+        "**/.matplotlib": true,
+        "**/.ms-ad": true,
+        "**/.oracle_jre_usage": true,
+        "**/.runelite": true,
+        "**/.spyder-py3": true,
+        "**/.vscode": true
+    },
+    "workbench.colorTheme": "Default Dark+",
+    "editor.inlineSuggest.suppressSuggestions": true,
+    "git.autofetch": true,
+    "tabnine.experimentalAutoImports": true,
+    "workbench.iconTheme": "vscode-icons",
+    "github.copilot.nextEditSuggestions.enabled": true
+}
