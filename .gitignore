@@ -14,3 +14,6 @@ Thumbs.db
 **/*token*
 **/*secret*
 **/*.key
+
+# local secrets
+**/.env
