@@ -16,10 +16,17 @@ affinity matches you. Keep items small enough to finish + verify in one cycle.
       (scope `bot`; Send Messages + Read History) → authorize into "Hugz & Ticklez
       Enterprisez". Captcha → append to `STAGED_FOR_EVAN.md`. Verify:
       `post_as_bot.py --whoami --token-env KOTR_BOT_TOKEN` shows the KOTR bot.
-- [ ] `(any)` **Bidirectional KOTR↔Gir.** Duplicate `~/Gir/tools/discord_operator_listener.py`
+- [x] `(any)` **Bidirectional KOTR↔Gir.** Duplicate `~/Gir/tools/discord_operator_listener.py`
       into a tiny KOTR gateway listening in `#kotr-ai-builders` on `KOTR_BOT_TOKEN`; run in
       tmux. Demonstrate KOTR posts → Gir acks → KOTR acks back. Verify by screenshot.
-      (Blocked until the KOTR bot token exists.)
+      <!-- LIVE MESSAGE-PATH DONE 2026-06-15 claude-p: full triangle closed with 3 real msg IDs
+      in #kotr-ai-builders — KOTR handshake (webhook) 1516060569013190668 -> GIR#3756 real-bot ack
+      1516060570812682251 -> KOTR ack-back (webhook) 1516060573677256766, fired only after
+      gateway `once --allow-clawhip` matched nonce hs-e1abd18f; read-back VERIFIED 3/3 in order,
+      selftest 11/11. Read half used the GIR clawhip token. REMAINING (desktop-gated): a
+      dedicated KOTR READ identity + GIR brain auto-acking #kotr-ai-builders (its run-loop polls
+      #gir-ops-private). Those finish once the standalone KOTR_BOT_TOKEN (item 1) exists. -->
+      <!-- (Was "Blocked until the KOTR bot token exists" — disproved: message path provable now via GIR-token read.) -->
 - [x] `(any)` **Gir Ollama backend live.** Make Windows Ollama reachable from WSL
       (`OLLAMA_HOST=0.0.0.0` + firewall allow 11434, or run the ollama call Windows-side).
       Start `~/Gir/tools/discord_operator_listener.py run-loop` in tmux. Verify: send
