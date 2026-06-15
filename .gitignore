@@ -6,3 +6,11 @@
 # OS / editor noise
 .DS_Store
 Thumbs.db
+
+# --- NEVER commit credentials (added for WSL CLI env capture) ---
+**/auth.json
+**/.credentials.json
+**/.claude.json
+**/*token*
+**/*secret*
+**/*.key
