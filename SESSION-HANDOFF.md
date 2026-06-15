@@ -68,3 +68,9 @@ The Warcraft_III repo currently has only the v0.49 map + docs. The desktop debug
 - the extracted source: _extract_v050/war3map.j
 - _crew/  (including we_diffs/ and hero_inventory_command_hub_SPEC.md)
 Mind .gitignore / large-file limits; if the .w3x is >100MB use Git LFS.
+
+## ORDER 8 — push the 2 helper scripts the playtest harness calls
+kotr_verified_playtest.ps1 invokes two sibling scripts (via $ToolsDir = $PSScriptRoot) that are NOT in the repo - they live only in the laptop's Downloads/_kotr_tools:
+- cleanup_stale_claude.ps1
+- kotr_playtest_loop.ps1
+From the laptop, copy BOTH into KOTR/tools/ in the Warcraft_III repo and push. Without them the desktop debug routine fails at the pre-flight cleanup / playtest-loop step.
