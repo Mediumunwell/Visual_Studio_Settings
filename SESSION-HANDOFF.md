@@ -62,9 +62,9 @@ Execute in order. Push everything back to GitHub so the desktop can pull.
 
 _Later: Jetson Orin Nano to host Gir's brain — out of scope for now._
 
-## ORDER 7 — push the latest KOTR v0.50 build (laptop → Warcraft_III repo)
-The Warcraft_III repo currently has only the **v0.49** map + docs. The desktop debug routine needs the current build. From the laptop, add to the  repo and push:
--  (latest playable map)
-- the extracted source 
--  (incl.  and )
-Mind  / large-file limits; if the .w3x is >100MB use Git LFS.
+## ORDER 7 — push the latest KOTR v0.50 build (laptop -> Warcraft_III repo)
+The Warcraft_III repo currently has only the v0.49 map + docs. The desktop debug routine needs the current build. From the laptop, add to the Warcraft_III repo and push:
+- KOTR/Knights_of_the_Round_Table_v0.50.w3x   (latest playable map)
+- the extracted source: _extract_v050/war3map.j
+- _crew/  (including we_diffs/ and hero_inventory_command_hub_SPEC.md)
+Mind .gitignore / large-file limits; if the .w3x is >100MB use Git LFS.
