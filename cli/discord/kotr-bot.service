@@ -1,0 +1,9 @@
+[Unit]
+Description=KOTR Discord bot
+After=network-online.target
+[Service]
+ExecStart=%h/Visual_Studio_Settings/cli/discord/run-kotr-bot.sh
+Restart=always
+RestartSec=5
+[Install]
+WantedBy=default.target
