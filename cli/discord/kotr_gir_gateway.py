@@ -73,7 +73,10 @@ def load_clawhip_token() -> tuple[str, str]:
     if not cfg.exists():
         return "", "none"
     try:
-        import tomllib
+        try:
+            import tomllib
+        except ModuleNotFoundError:  # Python < 3.11 (e.g. Ubuntu 22.04/py3.10)
+            import tomli as tomllib
         data = tomllib.loads(cfg.read_text(encoding="utf-8"))
         tok = str(data.get("providers", {}).get("discord", {}).get("token", "")).strip()
         return (tok, "clawhip:config.toml") if tok else ("", "none")
