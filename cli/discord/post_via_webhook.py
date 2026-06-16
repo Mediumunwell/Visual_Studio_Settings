@@ -26,15 +26,43 @@ def load_env_value(key):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--message", required=True)
+    ap.add_argument("--message", required=True,
+                    help="Concise, human-scannable summary (problems + solutions + key info).")
+    ap.add_argument("--detail", default="",
+                    help="Verbose AI-to-AI payload; posted in a ||spoiler|| after the summary. "
+                         "Humans see the summary and click to expand; bots reading via the REST "
+                         "API get the full text regardless (spoilers are client-side only).")
     ap.add_argument("--username", default="KOTR")
     ap.add_argument("--env-key", default="KOTR_WEBHOOK_URL")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="Print the message body that WOULD be posted; do not contact Discord.")
     a = ap.parse_args()
+
+    # Build the two-part body: summary in the open, detail tucked in a spoiler.
+    # Discord hard-caps content at 2000 chars; keep the summary intact and fit the
+    # detail into the remainder. A spoiler can't contain a literal '||', so neutralize it.
+    LIMIT = 1990
+    content = a.message[:LIMIT]
+    if a.detail.strip():
+        safe = a.detail.replace("||", "‖")
+        head, tail = "\n||🤖 detail: ", "||"
+        budget = LIMIT - len(content) - len(head) - len(tail)
+        if budget > 20:
+            clipped = safe[:budget]
+            if len(safe) > budget:
+                clipped = clipped[:-1] + "…"
+            content += head + clipped + tail
+
+    if a.dry_run:
+        print(json.dumps({"ok": True, "dry_run": True, "username": a.username,
+                          "chars": len(content), "content": content}))
+        return 0
+
     url = load_env_value(a.env_key)
     if not url:
         print(json.dumps({"ok": False, "error": f"no_webhook_url[{a.env_key}]"}))
         return 2
-    payload = {"content": a.message[:1900], "username": a.username}
+    payload = {"content": content, "username": a.username}
     req = urllib.request.Request(
         url + "?wait=true",
         data=json.dumps(payload).encode("utf-8"),

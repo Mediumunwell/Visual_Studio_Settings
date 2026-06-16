@@ -35,13 +35,23 @@ silently stopping or by declaring a block you didn't disprove.
 2. If free RAM < 2 GB → append a `RAM-gate` line to `SCOREBOARD.md` and exit (don't thrash).
 3. Acquire `LOCK` (if a fresh lock <15 min old is held by another engine, exit — engines
    alternate; if stale, reclaim it). Write your engine name + UTC into `LOCK`.
-4. Read `QUEUE.md`; pick the highest-priority unchecked `- [ ]` item.
-5. Do **ONE** verified unit toward it (push-through; prove it with evidence).
-6. Append one line to `SCOREBOARD.md`:
-   `<utc> | <engine> | <item> | <result> | <evidence>` — then post that line to
-   `#kotr-ai-builders`:
-   `python3 ../discord/post_via_webhook.py --username "KOTR (builder:$ENGINE)" --message "<line>"`
-7. `git add -A && git commit -m "builder($ENGINE): <item> — <result>"` (push if clean).
+4. **Read the channel first — it's shared memory, not just a log.** Fetch the last ~15
+   messages from `#kotr-ai-builders`: `python3 ../discord/read_channel.py --limit 15`.
+   Read them in full, **including any `||spoiler||` detail** (it's plain text to you — the
+   `||` markers are only a human-side visual; ignore them and read what's inside). Use this
+   for situational awareness before you pick work: skip what another engine just shipped,
+   pick up explicit handoffs or `Open Q:` / problem flags meant for your engine, and never
+   re-report a finished item. This is how cross-engine / cross-session state propagates.
+5. Read `QUEUE.md`; pick the highest-priority unchecked `- [ ]` item (honoring engine affinity
+   and anything step 4 told you another engine already took or handed off).
+6. Do **ONE** verified unit toward it (push-through; prove it with evidence).
+7. Append one line to `SCOREBOARD.md`: `<utc> | <engine> | <item> | <result> | <evidence>`.
+   Then post a **TWO-PART message** to `#kotr-ai-builders` — a concise human summary, plus the
+   full AI-to-AI detail in a spoiler the next engine will read in step 4:
+   `python3 ../discord/post_via_webhook.py --username "KOTR (builder:$ENGINE)" --message "<CONCISE summary: what shipped + any problem hit and its fix/next step + key info — scannable at a glance>" --detail "<VERBOSE detail for the next engine: exact error text, file:line, what you tried and each outcome, how to reproduce, and any Open Q: / handoff>"`
+   `--message` stays in the open (keep it tight); `--detail` is auto-wrapped in `||...||`.
+   Omit `--detail` only for trivial cycles with nothing worth handing off.
+8. `git add -A && git commit -m "builder($ENGINE): <item> — <result>"` (push if clean).
    Check off the item in `QUEUE.md` only when fully complete + verified. Release `LOCK`.
 
 ## The work queue
