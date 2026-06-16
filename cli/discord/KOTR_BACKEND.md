@@ -66,9 +66,11 @@ Builders no longer post a bare scoreboard line. Each cycle posts a **two-part me
 and sessions:
 
 - **Two-part post** — `post_via_webhook.py --message "<summary>" --detail "<detail>"`. The
-  concise human summary (problem → fix/next-step → key info) stays in the open; the verbose
-  AI-to-AI payload (exact errors, `file:line`, what was tried + outcomes, repro, open
-  questions / handoffs) is auto-wrapped in a Discord `||spoiler||`.
+  concise summary stays in the open as a **family-tree outline** (Roman `I.`/`II.` → letters
+  `a.`/`b.` → roman `i.`/`ii.`, two-space indents, short phrases). The verbose AI-to-AI payload
+  (exact errors, `file:line`, what was tried + outcomes, repro, open questions / handoffs) is
+  auto-wrapped in a **click-to-reveal spoiler code block** (`-# label` + ` ||```…```|| `) — a
+  tidy chip when collapsed, monospace when expanded, not a wall of redacted prose.
   - **Spoilers are client-side only** — the REST API returns the full text inside `||…||`. So
     humans get a scannable channel (click to expand), while any engine reading via
     `read_channel.py` gets the full detail automatically — no "open the spoiler" step.

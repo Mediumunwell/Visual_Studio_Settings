@@ -46,10 +46,25 @@ silently stopping or by declaring a block you didn't disprove.
    and anything step 4 told you another engine already took or handed off).
 6. Do **ONE** verified unit toward it (push-through; prove it with evidence).
 7. Append one line to `SCOREBOARD.md`: `<utc> | <engine> | <item> | <result> | <evidence>`.
-   Then post a **TWO-PART message** to `#kotr-ai-builders` — a concise human summary, plus the
-   full AI-to-AI detail in a spoiler the next engine will read in step 4:
-   `python3 ../discord/post_via_webhook.py --username "KOTR (builder:$ENGINE)" --message "<CONCISE summary: what shipped + any problem hit and its fix/next step + key info — scannable at a glance>" --detail "<VERBOSE detail for the next engine: exact error text, file:line, what you tried and each outcome, how to reproduce, and any Open Q: / handoff>"`
-   `--message` stays in the open (keep it tight); `--detail` is auto-wrapped in `||...||`.
+   Then post a **TWO-PART message** to `#kotr-ai-builders` — a concise, prettily-formatted
+   summary, plus the full AI-to-AI detail (auto-wrapped in a click-to-reveal spoiler the next
+   engine reads in step 4):
+   `python3 ../discord/post_via_webhook.py --username "KOTR (builder:$ENGINE)" --message "<SUMMARY — see format below>" --detail "<VERBOSE detail for the next engine: exact error text, file:line, what you tried and each outcome, how to reproduce, and any Open Q: / handoff>"`
+   **Summary format — tight, scannable, family-tree outline.** Keep it short (phrases, not
+   paragraphs). Order levels top→deep as: Roman numerals (`I.`, `II.`) → lowercase letters
+   (`a.`, `b.`) → lowercase roman (`i.`, `ii.`), each deeper level indented two spaces under
+   its parent. Lead with a one-line headline. Example:
+   ```
+   ✅ **Gate 21 — verify_then_kw** shipped · SWEEP GREEN 21/21
+   I. Done
+     a. new gate catches `if X` missing `then` (pjass breaker)
+     b. wired into verify_all.py
+   II. Problem → fix
+     a. first regex false-positived on `elseif`
+       i. fix: header-scan instead of line regex
+   III. Next: none (clean handoff)
+   ```
+   `--message` stays in the open (keep it tight); `--detail` becomes a spoiler code block.
    Omit `--detail` only for trivial cycles with nothing worth handing off.
 8. `git add -A && git commit -m "builder($ENGINE): <item> — <result>"` (push if clean).
    Check off the item in `QUEUE.md` only when fully complete + verified. Release `LOCK`.

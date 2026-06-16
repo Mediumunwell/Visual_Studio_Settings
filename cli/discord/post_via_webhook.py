@@ -44,8 +44,11 @@ def main():
     LIMIT = 1990
     content = a.message[:LIMIT]
     if a.detail.strip():
-        safe = a.detail.replace("||", "‖")
-        head, tail = "\n||🤖 detail: ", "||"
+        # Click-to-reveal: a small label + the detail as a spoiler-wrapped code block.
+        # Collapsed it's a tidy "click to reveal" chip (not a wall of redacted prose);
+        # expanded it's a clean monospace block. Neutralize ``` and || so neither breaks.
+        safe = a.detail.replace("```", "ʼʼʼ").replace("||", "‖")
+        head, tail = "\n-# 🤖 builder detail — click to reveal ↓\n||```\n", "\n```||"
         budget = LIMIT - len(content) - len(head) - len(tail)
         if budget > 20:
             clipped = safe[:budget]
