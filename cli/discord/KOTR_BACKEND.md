@@ -29,7 +29,11 @@ Channels: `#kotr-ai-builders` = `1515624584815181905`, `#gir-ops-private` = `149
   gateway. Token from `--token-env`, `$*_BOT_TOKEN`, or `~/.clawhip/config.toml`.
   `--whoami` confirms the token/identity without posting. Used by **GIR**.
 - **`post_via_webhook.py`** — post via a webhook URL with a custom `username`.
-  Used by the four **KOTR** actors. Reads `KOTR_WEBHOOK_URL` from `.env`.
+  Used by the four **KOTR** actors. Reads `KOTR_WEBHOOK_URL` from `.env`. `--detail` adds a
+  verbose AI-to-AI payload in a `||spoiler||` after the summary; `--dry-run` prints the body
+  without posting (see "Message format" below).
+- **`read_channel.py`** — read recent channel messages *as the bot* (the read half; a webhook
+  is write-only). Needs a real bot token. Default channel `#kotr-ai-builders`.
 - **`make_webhook.py`** — create a channel webhook using a bot token (needs Manage
   Webhooks) and write its URL into `.env`. How the KOTR webhook was made.
 - **`discord_channels.py`** — list a guild's channels (name → id). Read-only.
@@ -54,6 +58,31 @@ Gotchas learned: a scheduled task blocks on the Bash permission prompt unless th
 exact command is pre-approved in the project's `.claude/settings.local.json`
 (`Bash(wsl bash:*)`); `codex exec` hangs if given a prompt arg while stdin is an open
 pipe — pipe the prompt in instead.
+
+## Message format & read-on-spin-up (shared memory) — added 2026-06-16
+
+Builders no longer post a bare scoreboard line. Each cycle posts a **two-part message** and
+**reads the channel on spin-up**, turning `#kotr-ai-builders` into shared memory across engines
+and sessions:
+
+- **Two-part post** — `post_via_webhook.py --message "<summary>" --detail "<detail>"`. The
+  concise human summary (problem → fix/next-step → key info) stays in the open; the verbose
+  AI-to-AI payload (exact errors, `file:line`, what was tried + outcomes, repro, open
+  questions / handoffs) is auto-wrapped in a Discord `||spoiler||`.
+  - **Spoilers are client-side only** — the REST API returns the full text inside `||…||`. So
+    humans get a scannable channel (click to expand), while any engine reading via
+    `read_channel.py` gets the full detail automatically — no "open the spoiler" step.
+  - `--detail` is optional (omit for trivial cycles); `--dry-run` prints the body without
+    posting; inner `||` is neutralized so it can't close the spoiler early. Backward-compatible:
+    no `--detail` → summary only, exactly as before.
+- **Read-on-spin-up** — `read_channel.py --limit 15` (BUILDER_PROMPT step 4). Before picking
+  work each cycle, an engine reads the last ~15 messages (including spoiler detail) so it skips
+  what another engine just shipped, picks up handoffs / `Open Q:` flags, and never re-reports a
+  finished item. Reading needs a real bot token (webhooks are write-only) — currently the
+  restored **GIR** token in `~/.clawhip/config.toml`.
+
+> Implemented in `Visual_Studio_Settings@13f66b0`. Works on Python 3.10 too via the
+> `tomllib`→`tomli` shim (`cli/discord/requirements.txt`).
 
 ## Recreate on the desktop
 
