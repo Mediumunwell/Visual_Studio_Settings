@@ -78,8 +78,10 @@ KOTR↔Gir, (3) **Gir's Ollama backend** live, (4) **Order 7** map push. Then KO
 work (`Maps/KOTR/_crew/we_diffs/`, hero-inventory spec).
 
 ## Hard rules (from `Systems_Migration/AGENTS.md` — never violate)
-- Never modify any `.w3x` by automation; World Editor saves only; **v0.49 is untouchable**;
-  no F9 / Test Map.
+- WORLD EDITOR (updated 2026-06-16 by owner): you MAY make changes in the World Editor and
+  **save** them — but ONLY by driving the WE GUI (computer-use) and using WE's own Save. NEVER
+  hand-edit `.w3x` / `war3map.*` binaries (that corrupts the map). Back the map up first;
+  **v0.49 stays untouchable**; verify every change by visually reading the result.
 - Never `Start-Process` Warcraft III directly (Battle.net Play path only); never type the
   Battle.net or any password.
 - Playtest claims require **visually reading frames** — exit codes false-positive.
