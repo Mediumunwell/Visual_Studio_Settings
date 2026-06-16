@@ -18,12 +18,14 @@ SCAN=( "/mnt/e/Claude Projects/Systems_Migration" "$DIR" )
 blocked="$(
   for d in "${SCAN[@]}"; do
     [ -d "$d" ] || continue
-    grep -rinE "blocked|STAGED_FOR|\[ \].*block" \
+    grep -rinE --color=never "blocked|STAGED_FOR|\[ \].*block" \
       --include="QUEUE.md" --include="SCOREBOARD.md" --include="STAGED_FOR_*.md" \
       --include="*.md" "$d" 2>/dev/null
   done | sed -E 's#/mnt/e/Claude Projects/##' | grep -ivE "BLOCKED_ROUTINES_LOG" | sort -u | head -40
 )"
 [ -z "$blocked" ] && blocked="(no items currently tagged blocked — report that the queues are clear.)"
+# strip to clean ASCII (tab/newline + printable) so color/control bytes can't corrupt the JSON body
+blocked="$(printf '%s' "$blocked" | tr -cd '\11\12\15\40-\176')"
 
 # --- 2. ask kotr-ai how to unblock / prevent ------------------------------------------------
 PF="$(mktemp)"; trap 'rm -f "$PF" "$RF" 2>/dev/null' EXIT
@@ -38,7 +40,7 @@ EOF
 RF="$(mktemp)"
 WPF="$(wslpath -w "$PF")"
 powershell.exe -NoProfile -Command "
-  \$p = Get-Content -Raw -LiteralPath '$WPF';
+  \$p = [string](Get-Content -Raw -LiteralPath '$WPF');
   \$b = @{ model='kotr-ai'; prompt=\$p; stream=\$false } | ConvertTo-Json -Compress;
   try { (Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/generate' -Method Post -Body \$b -ContentType 'application/json' -TimeoutSec 600).response }
   catch { 'INFER_ERROR: ' + \$_.Exception.Message }
