@@ -40,6 +40,14 @@ MODEL='gir:latest'
 # actionable DIAGNOSTIC instead of a vague apology. Keep the heaviest/best model first.
 MODELS=( "$MODEL" 'gir:fast' )
 POST="$DIR/../discord/post_via_webhook.py"
+# Provenance stamp — 2026-06-17: the recurring "(gir:latest returned no analysis)" channel
+# noise was misattributed for TWO cycles to THIS local script (8f5be1b fallback+retry, a571449
+# self-heal) and re-hardened both times — yet the noise persisted because it originates from a
+# DIFFERENT pulse source: the failing 45-min posts are absent from this host's BLOCKED_ROUTINES_LOG
+# and use the OLD pre-fix wording, while this host's gir:latest answers fine on the same REST call.
+# Untraceable because posts never said WHO sent them. From now every log line + channel post carries
+# src=<host>@<short-sha> so any future drift names its own origin host/commit instead of being guessed.
+SRC="$(hostname 2>/dev/null || echo unknown)@$(git -C "$DIR" rev-parse --short HEAD 2>/dev/null || echo nogit)"
 # Canonical Systems_Migration lives in the WSL home (mirror at /mnt/c/Users/Morph/Projects).
 SCAN=( "/home/mediumunwell/Systems_Migration" "$DIR" )
 
@@ -105,9 +113,9 @@ fi
 # --- 3. log + post --------------------------------------------------------------------------
 ts="$(date -u +%FT%TZ)"
 nblock="$(printf '%s\n' "$blocked" | grep -c . || true)"
-{ echo; echo "## $ts — kotr-ai pulse ($nblock scanned lines, model=$used_model)"; echo '```'; echo "$analysis"; echo '```'; } >> "$LOG"
+{ echo; echo "## $ts — kotr-ai pulse ($nblock scanned lines, model=$used_model, src=$SRC)"; echo '```'; echo "$analysis"; echo '```'; } >> "$LOG"
 
-summary="🧠 **kotr-ai pulse** $ts · model $used_model
+summary="🧠 **kotr-ai pulse** $ts · model $used_model · src $SRC
 I. Scanned $nblock blocked/staged lines across KOTR repos
 II. Proposed unblock + prevention steps (detail ↓)
 III. Logged to cli/builder/BLOCKED_ROUTINES_LOG.md"
