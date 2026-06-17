@@ -10,6 +10,24 @@
 set -uo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG="$DIR/BLOCKED_ROUTINES_LOG.md"
+
+# --- 0. self-heal against stale clones ------------------------------------------------------
+# 2026-06-17: the recurring "($MODEL returned no analysis — check the server / VRAM)" channel
+# noise was traced to a STALE clone running an OLDER commit of this script (gir was actually
+# healthy; the canonical fix sat on origin/main). Before doing anything, fast-forward this clone
+# to its upstream and re-exec once if the script changed — so any clone that tracks the remote
+# self-updates and can never again post outdated diagnostics. Safe: clean-tree-only (won't disturb
+# an active builder cycle), --ff-only (no merge commits, aborts cleanly if diverged), offline-safe,
+# loop-guarded. Note: a clone that NEVER pulls still won't update — that case escalates to STAGED.
+if [ -z "${PULSE_SELF_UPDATED:-}" ] && git -C "$DIR" rev-parse --git-dir >/dev/null 2>&1 \
+   && git -C "$DIR" diff --quiet 2>/dev/null && git -C "$DIR" diff --cached --quiet 2>/dev/null; then
+  before="$(git -C "$DIR" rev-parse HEAD 2>/dev/null)"
+  git -C "$DIR" fetch --quiet origin 2>/dev/null && git -C "$DIR" merge --ff-only --quiet '@{u}' 2>/dev/null
+  after="$(git -C "$DIR" rev-parse HEAD 2>/dev/null)"
+  if [ -n "$before" ] && [ "$after" != "$before" ]; then
+    export PULSE_SELF_UPDATED=1; exec bash "$0" "$@"
+  fi
+fi
 # Inference runs over the Windows-side Ollama REST API (127.0.0.1:11434); $EXE is only a
 # convenience handle for CLI fallbacks. MODEL must be a model that actually exists on this
 # host — `ollama list` shows gir/qwen, NOT a `kotr-ai` model (that name 404s -> empty pulse).
