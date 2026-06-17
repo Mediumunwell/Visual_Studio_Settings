@@ -15,6 +15,12 @@ LOG="$DIR/BLOCKED_ROUTINES_LOG.md"
 # host — `ollama list` shows gir/qwen, NOT a `kotr-ai` model (that name 404s -> empty pulse).
 EXE='/mnt/c/Users/Morph/AppData/Local/Programs/Ollama/ollama.exe'; [ -f "$EXE" ] || EXE='/mnt/e/Ollama/ollama.exe'
 MODEL='gir:latest'
+# Resilience: a fresh pulse used to noise-post "(returned no analysis)" the instant $MODEL came
+# back empty — almost always transient VRAM/load contention (e.g. the WE-GUI loop has Warcraft
+# loaded), NOT a real outage. We now try each MODEL in turn (gir:fast is the lighter fallback that
+# fits when VRAM is tight) with a retry each, and only if EVERY attempt fails do we post an
+# actionable DIAGNOSTIC instead of a vague apology. Keep the heaviest/best model first.
+MODELS=( "$MODEL" 'gir:fast' )
 POST="$DIR/../discord/post_via_webhook.py"
 # Canonical Systems_Migration lives in the WSL home (mirror at /mnt/c/Users/Morph/Projects).
 SCAN=( "/home/mediumunwell/Systems_Migration" "$DIR" )
@@ -44,22 +50,46 @@ $blocked
 EOF
 RF="$(mktemp)"
 WPF="$(wslpath -w "$PF")"
-powershell.exe -NoProfile -Command "
-  \$p = [string](Get-Content -Raw -LiteralPath '$WPF');
-  \$b = @{ model='$MODEL'; prompt=\$p; stream=\$false } | ConvertTo-Json -Compress;
-  try { (Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/generate' -Method Post -Body \$b -ContentType 'application/json' -TimeoutSec 600).response }
-  catch { 'INFER_ERROR: ' + \$_.Exception.Message }
-" 2>/dev/null | tr -d '\r' > "$RF"
-# strip deepseek <think> traces
-analysis="$(sed -E ':a;N;$!ba; s#<think>.*</think>##g' "$RF" | sed -E 's/^[[:space:]]*//' )"
-[ -z "${analysis//[[:space:]]/}" ] && analysis="($MODEL returned no analysis — check the server / VRAM / model name.)"
+# Try each model (one retry each) until one returns a non-empty answer (after <think>-strip).
+analysis=""; used_model=""; last_err=""
+for m in "${MODELS[@]}"; do
+  for attempt in 1 2; do
+    powershell.exe -NoProfile -Command "
+      \$p = [string](Get-Content -Raw -LiteralPath '$WPF');
+      \$b = @{ model='$m'; prompt=\$p; stream=\$false } | ConvertTo-Json -Compress;
+      try { (Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/generate' -Method Post -Body \$b -ContentType 'application/json' -TimeoutSec 600).response }
+      catch { 'INFER_ERROR: ' + \$_.Exception.Message }
+    " 2>/dev/null | tr -d '\r' > "$RF"
+    if grep -q '^INFER_ERROR:' "$RF"; then
+      last_err="$m attempt$attempt: $(grep -m1 '^INFER_ERROR:' "$RF" | cut -c1-200)"; continue
+    fi
+    # strip deepseek <think> traces
+    cand="$(sed -E ':a;N;$!ba; s#<think>.*</think>##g' "$RF" | sed -E 's/^[[:space:]]*//' )"
+    if [ -n "${cand//[[:space:]]/}" ]; then analysis="$cand"; used_model="$m"; break 2; fi
+    last_err="$m attempt$attempt: empty response (post-<think>-strip)"
+  done
+done
+# Every attempt failed -> post an ACTIONABLE diagnostic (models tried, last error, live model
+# list), not a vague apology. The next scheduled pulse self-recovers once VRAM frees up.
+if [ -z "${analysis//[[:space:]]/}" ]; then
+  avail="$(curl -s --max-time 15 http://127.0.0.1:11434/api/tags 2>/dev/null | tr -cd '\11\12\15\40-\176' | python3 -c "import sys,json
+try:
+    d=json.load(sys.stdin); print(', '.join(m['name'] for m in d.get('models',[])) or '(none listed)')
+except Exception as e:
+    print('tags-unreachable: %s' % e)" 2>/dev/null)"
+  analysis="DIAGNOSTIC — no model produced analysis this pulse (tried: ${MODELS[*]}).
+Last error: ${last_err:-none captured}.
+Ollama @127.0.0.1:11434 models available: ${avail:-unreachable}.
+Likely transient VRAM/load contention (e.g. WE-GUI loop has Warcraft loaded); next pulse self-recovers. If persistent, check the Ollama server / model names."
+  used_model="(none — diagnostic)"
+fi
 
 # --- 3. log + post --------------------------------------------------------------------------
 ts="$(date -u +%FT%TZ)"
 nblock="$(printf '%s\n' "$blocked" | grep -c . || true)"
-{ echo; echo "## $ts — kotr-ai pulse ($nblock scanned lines)"; echo '```'; echo "$analysis"; echo '```'; } >> "$LOG"
+{ echo; echo "## $ts — kotr-ai pulse ($nblock scanned lines, model=$used_model)"; echo '```'; echo "$analysis"; echo '```'; } >> "$LOG"
 
-summary="🧠 **kotr-ai pulse** $ts
+summary="🧠 **kotr-ai pulse** $ts · model $used_model
 I. Scanned $nblock blocked/staged lines across KOTR repos
 II. Proposed unblock + prevention steps (detail ↓)
 III. Logged to cli/builder/BLOCKED_ROUTINES_LOG.md"
