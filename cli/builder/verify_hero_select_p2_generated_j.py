@@ -41,8 +41,16 @@ WHAT IT BINDS (read-only; touches no .w3x and no shippable .j)
   1. Per-slot scalars (forward JSON->.j, equality is inherently both-way): HeroType,
      NameStr (=TRIGSTR_<PlayerNameStr>), AnnounceStr (=TRIGSTR_<AnnounceStr>),
      TakenVillager, SpawnAbility (null->0 else '<raw>'), EnableTrig (None->null),
+     CamLoc (=GetRectCenter(<CamRect>) — the per-slot camera-pan target; see note),
      and the slot-header Name, the owner/claim/pedestal comment, the
      spawnApi/extrasHook comment.
+
+  NOTE (CamLoc — added 2026-06-18 claude-p): the datatable generator originally DROPPED the
+  per-slot camera pan entirely, so the `_crew` paste blob and its JSON both lacked CamLoc while
+  the authoritative pjass-compiled loop-gen output (`fix_specs/hero_select_p2_loop_data.gen.j`)
+  carried all 10. This binder checked blob<->JSON only, so the gap was invisible (GREEN on a
+  CamLoc-less pair). Pasting that blob would spawn heroes with no camera pan. The generator now
+  emits CamLoc and the JSON carries CamRect; this gate binds them so the drop can never recur.
   2. Spans: each table's Start/Count in the `.j` == the JSON `<tbl>_span[i]`, AND
      Count == len(per-slot list) (HeroItems/AllyUnits/RescueUnits/...).
   3. Flat sub-tables: each `.j` `udg_CastleSlot_<Tbl>[k]` == JSON `<tbl>_flat[k]`,
@@ -199,6 +207,10 @@ def audit(j, data, live_md5, live_lines):
         want(i, "SpawnAbility", "0" if sa is None else f"'{sa}'")
         et = s["EnableTrig"]
         want(i, "EnableTrig", "null" if et is None else et)
+        # CamLoc: the per-slot camera-pan target = GetRectCenter(<appear rect>). Binds the blob's
+        # CamLoc RHS to the JSON's CamRect both ways; a missing/dropped CamLoc (the original defect)
+        # reads got=None != want -> RED.
+        want(i, "CamLoc", f"GetRectCenter({s['CamRect']})")
         # slot-header name
         add("scalar", f"slot{i}.Name", j["slot_names"].get(i) == s["Name"],
             f'got={j["slot_names"].get(i)!r} want={s["Name"]!r}')
@@ -272,6 +284,7 @@ def selftest():
              "OwnerGlobal": "udg_A", "ClaimFlag": "udg_oneA",
              "PedestalUnitsRemoved": ["gg_unit_Harf_0001"],
              "SpawnApi": "CreateNUnitsAtLoc", "HasExtrasHook": False,
+             "CamRect": "gg_rct_Arthur_Kay_Lancelot_Appear",
              "HeroItems": ["I005", "ankh"], "AllyUnits": ["gg_unit_x"],
              "RescueUnits": [], "InvulnUnits": [], "AvailUnits": []},
             {"HeroTypeId": "Hvwd", "PlayerNameStr": "840", "AnnounceStr": "2988",
@@ -280,6 +293,7 @@ def selftest():
              "OwnerGlobal": "udg_G", "ClaimFlag": "udg_oneG",
              "PedestalUnitsRemoved": ["gg_unit_Hvwd_0000"],
              "SpawnApi": "CreateNUnitsAtLocFacingLocBJ", "HasExtrasHook": True,
+             "CamRect": "gg_rct_Guinevere_Appear",
              "HeroItems": ["bzbe"], "AllyUnits": ["gg_unit_y", "gg_unit_z"],
              "RescueUnits": ["gg_unit_r"], "InvulnUnits": [], "AvailUnits": ["Hgam"]},
         ],
@@ -308,6 +322,7 @@ def selftest():
             L.append(f"    set udg_CastleSlot_SpawnAbility[{i}]=" + ("0" if sa is None else f"'{sa}'"))
             et = s["EnableTrig"]
             L.append(f"    set udg_CastleSlot_EnableTrig[{i}]=" + ("null" if et is None else et))
+            L.append(f"    set udg_CastleSlot_CamLoc[{i}]=GetRectCenter({s['CamRect']})")
             L.append(f"    // owner={s['OwnerGlobal']} claim={s['ClaimFlag']} "
                      f"pedestal={s['PedestalUnitsRemoved']!r}")
             L.append(f"    // spawnApi={s['SpawnApi']} extrasHook="
@@ -347,6 +362,16 @@ def selftest():
     c_md5 = caught(j_text=good.replace(CLAIMED_MD5, "0" * 32), cat="md5")
     # 6) live extract md5 drifted from JSON
     c_live = caught(live_md5="f" * 32, cat="md5")
+    # 7) the ORIGINAL DEFECT: drop a slot's CamLoc line from the .j entirely (the camera pan the
+    #    datatable generator used to omit). Must read got=None != want -> RED in the scalar cat.
+    no_cam = "\n".join(l for l in good.splitlines()
+                       if "udg_CastleSlot_CamLoc[0]=" not in l)
+    c_camdrop = caught(j_text=no_cam, cat="scalar")
+    # 8) point a CamLoc at the WRONG appear rect (silent miss-pan) -> RED.
+    c_camwrong = caught(
+        j_text=good.replace("CamLoc[1]=GetRectCenter(gg_rct_Guinevere_Appear)",
+                            "CamLoc[1]=GetRectCenter(gg_rct_Nimue_Appear)"),
+        cat="scalar")
 
     print(f"  scalar hand-edit caught   : {c_scalar}")
     print(f"  flat-element drift caught  : {c_elem}")
@@ -354,7 +379,9 @@ def selftest():
     print(f"  span-integrity drift caught: {c_spanint}")
     print(f"  .j/json md5 split caught    : {c_md5}")
     print(f"  live-extract md5 drift caught: {c_live}")
-    ok = all([c_scalar, c_elem, c_len, c_spanint, c_md5, c_live])
+    print(f"  CamLoc drop caught          : {c_camdrop}")
+    print(f"  CamLoc wrong-rect caught    : {c_camwrong}")
+    ok = all([c_scalar, c_elem, c_len, c_spanint, c_md5, c_live, c_camdrop, c_camwrong])
     print(f"\nSELFTEST {'PASS' if ok else 'FAIL'}")
     return 0 if ok else 3
 
