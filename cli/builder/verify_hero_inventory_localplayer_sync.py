@@ -177,11 +177,20 @@ def audit(funcs):
         return True, findings
     findings.append("lazy-allocating synced getters: " + ", ".join(sorted(lazy)))
 
-    # Find the menu trigger handler(s) that gate a dispatch behind GetLocalPlayer.
+    # Find EVERY function that gates a dispatch behind GetLocalPlayer — NOT just
+    # Menu_On*.  A sibling of this desync class can live in ANY trigger handler or
+    # helper (e.g. the Spike/armory equipment menu's Spike_OnMenuItemUsed).  Whole-
+    # deliverable sweep 2026-06-18 (claude-p): of the 12 GLP-gated handlers across
+    # all 7 phases, only Menu_OnButtonUsed is a gated-only lazy-alloc site — the
+    # armory path opens locally but allocates nothing, and IEquipment/IInventory
+    # have unconditional allocators on the equip/pickup/save-load paths.  Dropping
+    # the Menu_On* name filter keeps that guarantee true for FUTURE edits instead of
+    # trusting a handler name; legitimate openers (Bag_Open/Sheet_Open allocate
+    # unconditionally) still pass because their gated calls reach no lazy getter.
     handlers = [n for n in funcs
-                if n.startswith("Menu_On") and GLP_OPEN_RE.search("\n".join(funcs[n]))]
+                if GLP_OPEN_RE.search("\n".join(funcs[n]))]
     if not handlers:
-        findings.append("WARN: no GetLocalPlayer-gated Menu_On* handler found — "
+        findings.append("WARN: no GetLocalPlayer-gated handler found — "
                         "Phase-6 dispatch shape changed; re-ground.")
         return True, findings
 
@@ -280,6 +289,22 @@ endfunction
 """
 
 
+# Sibling-class fixture: a NON-Menu handler (the Spike/armory equipment menu) with
+# the SAME gated-only lazy-alloc bug.  Under the old `Menu_On*`-only filter this was
+# invisible (ok=True, false GREEN); the generalized audit must flag it (ok=False).
+_BUGGY_SPIKE = """
+function Spike_OnMenuItemUsed takes nothing returns boolean
+    local unit u = GetTriggerUnit()
+    local player p = GetTriggerPlayer()
+    call UnitRemoveItem(u, GetManipulatedItem())
+    if GetLocalPlayer() == p then
+        call Menu_OpenScreen(p, u, 2)
+    endif
+    return false
+endfunction
+"""
+
+
 def selftest():
     fails = 0
 
@@ -299,10 +324,14 @@ def selftest():
     # negative control: no lazy getter at all -> OK (with WARN)
     check("control: no lazy getter", _BUGGY_HANDLER.replace("Menu_OpenScreen", "Noop"),
           expect_ok=True)
+    # generalization: a NON-Menu handler with the same bug must still be caught
+    # (regression guard against re-adding a handler-name filter).
+    check("buggy: non-Menu (Spike) gated-only lazy alloc", _LAZY + _BUGGY_SPIKE,
+          expect_ok=False)
     if fails:
         print(f"SELFTEST FAILED ({fails})")
         return 1
-    print("SELFTEST PASS (3/3)")
+    print("SELFTEST PASS (4/4)")
     return 0
 
 
