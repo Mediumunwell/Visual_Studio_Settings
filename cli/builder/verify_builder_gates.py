@@ -62,6 +62,7 @@ GATES = [
     "verify_hero_select_p2_runbook_anchors.py",
     "verify_hero_select_divergence_catalog_anchors.py",
     "verify_hero_select_p2_generated_j.py",
+    "verify_hero_select_p2_crew_vs_authority.py",
     "verify_castleslot_global_contract.py",
     # --- command-hub spec + classwide localplayer alloc ---
     "verify_command_hub_spec_grounding.py",
