@@ -5,8 +5,8 @@ Built 2026-06-18 by KOTR Builder (engine claude-p).
 
 WHY (the gap this closes):
   The fix_specs/ regression sweep (verify_all.py, 178/178) guards the v0.50 PASTE SET —
-  it knows nothing about the sixteen standalone gates that live HERE in cli/builder. Those
-  sixteen each bind a different documentation SOURCE-OF-TRUTH (recon binders, apply-runbooks,
+  it knows nothing about the seventeen standalone gates that live HERE in cli/builder. Those
+  seventeen each bind a different documentation SOURCE-OF-TRUTH (recon binders, apply-runbooks,
   per-phase build specs, the hero-select divergence catalog, the command-hub spec, the
   castleslot global contract, the localplayer-sync / desync2 link gates) BOTH WAYS against
   the live `_extract_v050/war3map.j`. Each was wired + cert'd one at a time and then run
@@ -42,7 +42,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 SELF = os.path.basename(__file__)
 
-# The sixteen standalone cli/builder gates, grouped by the source-of-truth each binds.
+# The seventeen standalone cli/builder gates, grouped by the source-of-truth each binds.
 GATES = [
     # --- hero-inventory track ---
     "verify_hero_inventory_phase0_recon_anchors.py",
@@ -50,6 +50,7 @@ GATES = [
     "verify_hero_inventory_runbook_hearthclock_anchors.py",
     "verify_hero_inventory_runbook_menuitem_collision.py",
     "verify_hero_inventory_runbook_phasefile_anchors.py",
+    "verify_hero_inventory_phasefile_anchors.py",
     "verify_hero_inventory_desync2_wholelink.py",
     "verify_hero_inventory_localplayer_sync.py",
     # --- companion-AI track ---
