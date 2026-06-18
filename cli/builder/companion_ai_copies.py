@@ -30,11 +30,24 @@ FOOTER INTEGRITY (the recurring truncation the channel keeps re-flagging)
   and never on its own counted as corruption — avoiding a false TRUNCATED verdict
   on a clean draft that simply ends with a usage-note comment.
 
+VERSION FAMILY (the other half of the confusion)
+  The hub is version-suffixed and evolves: `kotr_companion_ai_v0.52.j` →
+  `_v0.53.j` → `_v0.54.j` (plus the bare `kotr_companion_ai.j`).  An engine citing
+  "v0.52 is the hub" while the canonical work has already advanced to v0.54 — both
+  present in the SAME triggers dir — is the exact same "which is canonical" trap,
+  one version axis over.  So this reporter discovers the whole `kotr_companion_ai*.j`
+  family, tags each copy with its version, and judges divergence PER VERSION: two
+  copies of the *same* version that differ is a real silent drift (RED); two
+  *different* versions that differ is expected progression (not divergence).  It
+  also names the latest version present so the next engine cites the current hub,
+  not a stale suffix.
+
 EXIT CODES
-  0  exactly one distinct content across all discovered copies (no divergence)
-  2  >1 distinct content (copies have diverged) OR any copy is TRUNCATED
-     (missing EOF newline)
-  3  no copy of the file found (nothing to reconcile)
+  0  every version group is internally byte-identical and footer-intact
+     (cross-version differences are expected progression, NOT divergence)
+  2  some version group has >1 distinct content (a copy silently diverged) OR
+     any copy is TRUNCATED (missing EOF newline)
+  3  no copy of the file family found (nothing to reconcile)
 
 POSTURE: strictly read-only — md5/stat/grep only; never writes or edits any copy.
   Excludes *.bak* snapshots and AppData agent-session caches by design.
@@ -46,7 +59,9 @@ import subprocess
 import sys
 import time
 
-TARGET = "kotr_companion_ai_v0.52.j"
+TARGET_LABEL = "kotr_companion_ai*.j"
+# The whole version family: bare name OR a _vMAJOR.MINOR suffix.
+TARGET_RE = re.compile(r"^kotr_companion_ai(?:_v\d+\.\d+)?\.j$")
 
 # Roots to scan for live copies. Kept explicit so the report is deterministic and
 # fast; add a root here if a new mount appears.
@@ -69,10 +84,25 @@ EXCLUDE_FRAGMENTS = (
 REV_RE = re.compile(r"\brev(\d+)\b")
 FUNC_CAI_RE = re.compile(r"^\s*function\s+CAI_", re.MULTILINE)
 FUNC_KOTRAI_RE = re.compile(r"^\s*function\s+KotrAI_", re.MULTILINE)
+VER_RE = re.compile(r"_v(\d+)\.(\d+)\.j$")
+
+
+def ver_of(path):
+    """Version tag parsed from the filename: 'v0.54', or 'base' for the bare name."""
+    m = VER_RE.search(os.path.basename(path))
+    return f"v{int(m.group(1))}.{m.group(2)}" if m else "base"
+
+
+def ver_key(ver):
+    """Sortable key for a version tag; 'base' sorts below all numbered versions."""
+    if ver == "base":
+        return (-1, -1)
+    m = re.match(r"v(\d+)\.(\d+)$", ver)
+    return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
 
 
 def discover():
-    """Return absolute paths of every live TARGET copy under SEARCH_ROOTS."""
+    """Return absolute paths of every live copy of the TARGET family under roots."""
     seen = set()
     found = []
     for root in SEARCH_ROOTS:
@@ -81,8 +111,10 @@ def discover():
         for dirpath, dirnames, filenames in os.walk(root):
             # prune obviously-excluded subtrees for speed
             dirnames[:] = [d for d in dirnames if d not in (".git", "node_modules")]
-            if TARGET in filenames:
-                p = os.path.realpath(os.path.join(dirpath, TARGET))
+            for fn in filenames:
+                if not TARGET_RE.match(fn):
+                    continue
+                p = os.path.realpath(os.path.join(dirpath, fn))
                 if any(frag in p for frag in EXCLUDE_FRAGMENTS):
                     continue
                 if p in seen:
@@ -146,15 +178,69 @@ def fingerprint(path):
     mtime = os.path.getmtime(path)
 
     return {
-        "path": path, "md5": md5, "lines": nlines, "bytes": nbytes,
-        "footer": footer, "banner": has_banner, "ns": ns, "rev": rev,
-        "tracked": tracked, "head": head, "mtime": mtime,
+        "path": path, "ver": ver_of(path), "md5": md5, "lines": nlines,
+        "bytes": nbytes, "footer": footer, "banner": has_banner, "ns": ns,
+        "rev": rev, "tracked": tracked, "head": head, "mtime": mtime,
     }
 
 
 def short(path):
     home = os.path.expanduser("~")
     return path.replace(home, "~")
+
+
+def classify(fps):
+    """Version-aware verdict over a list of fingerprint dicts.
+
+    Returns (exit_code, lines) where lines are human-readable verdict strings.
+    Divergence is judged PER VERSION: >1 distinct content within a single version
+    tag is a real silent drift (RED); differences ACROSS versions are expected
+    progression and are not divergence. Any TRUNCATED copy is RED.
+    """
+    lines = []
+    if not fps:
+        return 3, [f"SKIP — no '{TARGET_LABEL}' copy found under the search roots."]
+
+    # group by version tag
+    groups = {}
+    for f in fps:
+        groups.setdefault(f["ver"], []).append(f)
+
+    drifted = {v: g for v, g in groups.items()
+               if len({f["md5"] for f in g}) > 1}
+    truncated = [f for f in fps if f["footer"] == "TRUNCATED"]
+
+    latest = max(groups, key=ver_key)
+    latest_fp = max(groups[latest], key=lambda f: f["mtime"])
+    lines.append(
+        f"LATEST version present: {latest} "
+        f"([{latest_fp['md5'][:8]}] {latest_fp['lines']}L {latest_fp['ns']}, "
+        f"{short(latest_fp['path'])}) — cite this, not a stale suffix.")
+
+    code = 0
+    if drifted:
+        code = 2
+        for v, g in sorted(drifted.items(), key=lambda kv: ver_key(kv[0])):
+            distinct = {f["md5"][:8] for f in g}
+            lines.append(
+                f"RED — version {v} has {len(distinct)} distinct contents across "
+                f"{len(g)} copies (SILENT DRIFT, same version should be identical): "
+                + ", ".join(short(f["path"]) for f in g))
+    if truncated:
+        code = 2
+        lines.append("RED — TRUNCATED (no EOF newline): "
+                     + ", ".join(short(f["path"]) for f in truncated))
+    if code == 0:
+        nver = len(groups)
+        if nver > 1:
+            lines.append(
+                f"GREEN — {nver} versions present, each internally byte-identical "
+                "and footer-intact. Cross-version differences are expected "
+                "progression, not divergence.")
+        else:
+            lines.append("GREEN — every copy is byte-identical and footer-intact. "
+                         "No divergence to reconcile.")
+    return code, lines
 
 
 def selftest():
@@ -170,28 +256,57 @@ def selftest():
         return p
 
     # 1. banner + EOF newline -> OK, banner Y
-    fp = fingerprint(write(TARGET,
+    fp = fingerprint(write("kotr_companion_ai_v0.52.j",
         "//==\nfunction CAI_Brain takes nothing returns nothing\nendfunction\n//====\n"))
     checks.append(("banner+nl => OK/bnrY",
                    fp["footer"] == "OK" and fp["banner"] and fp["ns"] == "CAI_*"))
 
     # 2. clean comment ending, EOF newline, NO banner -> OK, banner N (no false TRUNC)
-    fp = fingerprint(write(TARGET,
+    fp = fingerprint(write("kotr_companion_ai_v0.52.j",
         "function CAI_Brain takes nothing returns nothing\nendfunction\n// usage note\n"))
     checks.append(("noBanner+nl => OK/bnrN",
                    fp["footer"] == "OK" and not fp["banner"]))
 
     # 3. missing EOF newline -> TRUNCATED
-    fp = fingerprint(write(TARGET, "function CAI_X\nendfunction\n//== cut here"))
+    fp = fingerprint(write("kotr_companion_ai_v0.52.j", "function CAI_X\nendfunction\n//== cut here"))
     checks.append(("noEOFnl => TRUNCATED", fp["footer"] == "TRUNCATED"))
 
     # 4. KotrAI_* namespace detection
-    fp = fingerprint(write(TARGET, "function KotrAI_Tick takes nothing returns nothing\nendfunction\n"))
+    fp = fingerprint(write("kotr_companion_ai_v0.52.j", "function KotrAI_Tick takes nothing returns nothing\nendfunction\n"))
     checks.append(("KotrAI ns", fp["ns"] == "KotrAI_*"))
 
     # 5. rev marker extraction (max)
-    fp = fingerprint(write(TARGET, "// rev4 then rev25 later\nfunction CAI_A\nendfunction\n"))
+    fp = fingerprint(write("kotr_companion_ai_v0.52.j",
+        "// rev4 then rev25 later\nfunction CAI_A\nendfunction\n"))
     checks.append(("rev max=25", fp["rev"] == 25))
+
+    # 6. version tag parsed from filename (family member vs bare base)
+    checks.append(("ver_of v0.54",
+                   ver_of("/x/kotr_companion_ai_v0.54.j") == "v0.54"))
+    checks.append(("ver_of base",
+                   ver_of("/x/kotr_companion_ai.j") == "base"))
+    checks.append(("ver_key orders v0.54>v0.52>base",
+                   ver_key("v0.54") > ver_key("v0.52") > ver_key("base")))
+
+    def fp_of(ver, md5, footer="OK"):
+        return {"ver": ver, "md5": md5, "footer": footer, "mtime": 0.0,
+                "lines": 1, "ns": "CAI_*", "path": f"/x/{ver}/{md5}.j"}
+
+    # 7. cross-version differences are EXPECTED progression -> GREEN (exit 0)
+    code, _ = classify([fp_of("v0.52", "aaa"), fp_of("v0.54", "bbb")])
+    checks.append(("cross-version diff => GREEN", code == 0))
+
+    # 8. SAME-version distinct contents = real silent drift -> RED (exit 2)
+    code, _ = classify([fp_of("v0.52", "aaa"), fp_of("v0.52", "ccc")])
+    checks.append(("same-version drift => RED", code == 2))
+
+    # 9. a truncated copy -> RED (exit 2) even if versions otherwise agree
+    code, _ = classify([fp_of("v0.54", "ddd", footer="TRUNCATED")])
+    checks.append(("truncated => RED", code == 2))
+
+    # 10. empty set -> nothing to reconcile (exit 3)
+    code, _ = classify([])
+    checks.append(("no copies => EXIT3", code == 3))
 
     ok = sum(1 for _, c in checks if c)
     for name, c in checks:
@@ -205,44 +320,37 @@ def main():
         return selftest()
     copies = discover()
     if not copies:
-        print(f"SKIP — no '{TARGET}' copy found under the search roots.")
+        print(f"SKIP — no '{TARGET_LABEL}' copy found under the search roots.")
         return 3
 
     fps = [fingerprint(p) for p in copies]
-    fps.sort(key=lambda f: f["mtime"], reverse=True)
+    # sort by version (newest first), then mtime within a version (newest first)
+    fps.sort(key=lambda f: (ver_key(f["ver"]), f["mtime"]), reverse=True)
 
     md5s = {f["md5"] for f in fps}
-    truncated = [f for f in fps if f["footer"] == "TRUNCATED"]
+    vers = sorted({f["ver"] for f in fps}, key=ver_key, reverse=True)
 
     print(f"=== companion-AI hub copy reconciliation — {len(fps)} live copy(ies), "
-          f"{len(md5s)} distinct content(s) ===")
-    for i, f in enumerate(fps):
+          f"{len(vers)} version(s), {len(md5s)} distinct content(s) ===")
+    for f in fps:
         age_h = (time.time() - f["mtime"]) / 3600.0
         git = f"git:{f['head']}" if f["tracked"] and f["head"] else (
             "git:untracked" if f["head"] else "no-git")
         revs = f"rev{f['rev']}" if f["rev"] is not None else "rev?"
-        fresh = "  <-- FRESHEST (by mtime)" if i == 0 else ""
         bnr = "Y" if f["banner"] else "N"
-        print(f"  [{f['md5'][:8]}] {f['lines']:>5}L {f['bytes']:>7}B  "
+        print(f"  {f['ver']:<6} [{f['md5'][:8]}] {f['lines']:>5}L {f['bytes']:>7}B  "
               f"{f['footer']:<9} bnr={bnr} ns={f['ns']:<9} {revs:<6} {git:<14} "
-              f"{age_h:5.1f}h  {short(f['path'])}{fresh}")
+              f"{age_h:5.1f}h  {short(f['path'])}")
 
     print("-" * 78)
-    if len(md5s) > 1:
-        print(f"RED — {len(md5s)} distinct contents: the copies have DIVERGED. "
-              f"Freshest by mtime is {fps[0]['md5'][:8]} "
-              f"({short(fps[0]['path'])}).")
-        print("  → reconcile before any paste: confirm which copy is canonical "
-              "for the target use (desktop CAI_* hub vs crew KotrAI_* staged set "
-              "are PARALLEL implementations, not stale copies of each other).")
-    if truncated:
-        print(f"RED — {len(truncated)} copy(ies) TRUNCATED (no closing banner / "
-              f"no EOF newline): " + ", ".join(short(f["path"]) for f in truncated))
-    if len(md5s) == 1 and not truncated:
-        print("GREEN — every copy is byte-identical and footer-intact. "
-              "No divergence to reconcile.")
-        return 0
-    return 2
+    code, lines = classify(fps)
+    for ln in lines:
+        print(ln)
+    if code == 2:
+        print("  → reconcile before any paste: same-version copies must match; "
+              "desktop CAI_* hub vs crew KotrAI_* staged set are PARALLEL "
+              "implementations (not stale copies of each other).")
+    return code
 
 
 if __name__ == "__main__":
