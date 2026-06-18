@@ -26,6 +26,15 @@ WHAT IT CHECKS (read-only; touches no .w3x):
   (7) CloneItems disambig       L27380 == 'set k=UnitItemInSlot(source, i)', inside function CloneItems
                                  (i.e. L27380 is NOT the save path)
 
+  REVERSE DIRECTION (prose -> cite, added 2026-06-18): every anchor above is also bound the
+  OTHER way — the SPEC's "Grounded current-state (v0.50)" prose must STILL CARRY each cite
+  (the md5 prefix, the counts 3,236 / equip=0 / 132, the line cites L41089/L41162/L45466/L27380,
+  and the enclosing-fn names Trig_Save_GUI_Actions / CloneItems). The live-only checks (1)-(7)
+  catch a WE re-bake that moves the map out from under the SPEC; the prose checks catch the
+  twin seam — a SPEC EDIT that silently drops/rewrites a cite while the live source is
+  unchanged, leaving the gate green over a rotted SPEC. This is the same BOTH-directions
+  binding the runbook integration-correction gates use.
+
 Run:        python3 verify_command_hub_spec_grounding.py
 Self-test:  python3 verify_command_hub_spec_grounding.py --selftest
             (mutates an in-memory copy of the source so each anchor is broken in turn and
@@ -45,9 +54,38 @@ SRC = (Path.home() / ".." / ".." / "mnt" / "c" / "Users" / "Morph" / "OneDrive"
        / "Documents" / "Warcraft III" / "Maps" / "KOTR" / "_extract_v050" / "war3map.j")
 # Resolve via the canonical mount path (the OneDrive working copy the sweep cites).
 SRC = Path("/mnt/c/Users/Morph/OneDrive/Documents/Warcraft III/Maps/KOTR/_extract_v050/war3map.j")
+# the SPEC whose grounded-state cites we bind in the reverse direction (same _crew tree).
+SPEC = Path("/mnt/c/Users/Morph/OneDrive/Documents/Warcraft III/Maps/KOTR/_crew/hero_inventory_command_hub_SPEC.md")
 
 CANON_MD5 = "967131658fd8d4fb27ee0d7f74e4bd22"
 CANON_LINES = 75535
+
+# Reverse direction (prose -> cite): the literal each grounding anchor leaves in the SPEC prose.
+# A SPEC edit that drops/rewrites one of these fails RED even though the live source is intact.
+PROSE_CITES = [
+    ("src.md5",        "967131"),                 # the pinned hash prefix the SPEC carries
+    ("1.talent",       "3,236"),
+    ("2.equip",        "equip` = 0"),
+    ("3.giveitems",    "132"),
+    ("4.shopstart",    "L41089"),
+    ("5.shopsrtl",     "L41162"),
+    ("6.saveloop",     "L45466"),
+    ("6.saveloop.fn",  "Trig_Save_GUI_Actions"),
+    ("7.cloneitems",   "L27380"),
+    ("7.cloneitems.fn","CloneItems"),
+]
+
+
+def audit_prose(spec_text):
+    """Reverse direction: each grounding cite must still appear in the SPEC prose.
+    Returns (rows, failures); rows=[(id, cite, ok)]."""
+    rows, failures = [], []
+    for cid, cite in PROSE_CITES:
+        ok = cite in spec_text
+        rows.append((cid, cite, ok))
+        if not ok:
+            failures.append(f"{cid}.prose: SPEC no longer carries cite {cite!r}")
+    return rows, failures
 
 
 def enclosing_function(lines, lineno):
@@ -172,7 +210,17 @@ def selftest():
         caught[cid] = any(f.startswith(cid + ":") for f in fails)
         print(f"  break {cid:<13} @L{ln:<6} -> caught? {caught[cid]}")
 
-    ok = clean_content_ok and all(caught.values())
+    # reverse direction: a clean synthetic SPEC carries every cite; dropping one must be caught.
+    spec_ok = " ".join(cite for _cid, cite in PROSE_CITES)
+    _prows, pfails_clean = audit_prose(spec_ok)
+    prose_clean_ok = (len(pfails_clean) == 0)
+    print(f"  clean synthetic SPEC: ALL prose cites GREEN? {prose_clean_ok}")
+    spec_drop = spec_ok.replace("L45466", "L99999")          # SPEC edit rewrote the save-read cite
+    _prows2, pfails_drop = audit_prose(spec_drop)
+    caught_prose = any(f.startswith("6.saveloop.prose") for f in pfails_drop)
+    print(f"  break 6.saveloop.prose (drop L45466) -> caught? {caught_prose}")
+
+    ok = clean_content_ok and all(caught.values()) and prose_clean_ok and caught_prose
     print(f"\nSELFTEST {'PASS' if ok else 'FAIL'}")
     return 0 if ok else 3
 
@@ -183,20 +231,34 @@ def main():
     if not SRC.exists():
         print(f"FATAL: live source not found: {SRC}")
         return 2
+    if not SPEC.exists():
+        print(f"FATAL: command-hub SPEC not found: {SPEC}")
+        return 2
     raw = SRC.read_bytes()                               # md5 must match `md5sum` (raw bytes)
     src_md5 = hashlib.md5(raw).hexdigest()
     text = raw.decode("utf-8", "surrogatepass").replace("\r\n", "\n")  # CRLF -> LF for content
     rows, failures = audit(text, src_md5=src_md5)
     report(rows)
-    print(f"\nsource: {SRC}")
+
+    spec_text = SPEC.read_text()
+    prose_rows, prose_failures = audit_prose(spec_text)
+    print(f"\n{'PROSE CITE':<18}{'OK?':<6}CITE")
+    for cid, cite, ok in prose_rows:
+        print(f"{cid:<18}{'OK' if ok else 'XXXX':<6}{cite!r}")
+
+    failures = failures + prose_failures
+    print(f"\nsource: {SRC}\nSPEC:   {SPEC}")
     if failures:
-        print(f"\nRESULT: FAIL — {len(failures)} SPEC-grounding anchor(s) drifted:")
+        print(f"\nRESULT: FAIL — {len(failures)} SPEC-grounding anchor(s) drifted "
+              "(live-source and/or SPEC-prose direction):")
         for f in failures:
             print("  -", f)
-        print("Re-ground the SPEC against the current war3map.j before any implementer builds on it.")
+        print("Re-ground the SPEC against the current war3map.j (or restore the dropped cite) "
+              "before any implementer builds on it.")
         return 1
-    print("\nRESULT: GREEN — all 9 hero-inventory SPEC grounding anchors hold verbatim "
-          f"vs live source (md5 {CANON_MD5}, {CANON_LINES} lines).")
+    print(f"\nRESULT: GREEN — all 9 hero-inventory SPEC grounding anchors hold verbatim vs live "
+          f"source (md5 {CANON_MD5}, {CANON_LINES} lines) AND the SPEC prose still carries every "
+          f"one of the {len(prose_rows)} cites (bound BOTH directions).")
     return 0
 
 
