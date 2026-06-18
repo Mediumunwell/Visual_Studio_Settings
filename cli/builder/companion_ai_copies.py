@@ -86,6 +86,20 @@ FUNC_CAI_RE = re.compile(r"^\s*function\s+CAI_", re.MULTILINE)
 FUNC_KOTRAI_RE = re.compile(r"^\s*function\s+KotrAI_", re.MULTILINE)
 VER_RE = re.compile(r"_v(\d+)\.(\d+)\.j$")
 
+# The companion-AI SHIPS through the crew pipeline, NOT these standalone drafts. The
+# `kotr_companion_ai_v0.5x.j` family is the CAI_*-namespaced hand-paste DRAFT lineage
+# (ungated, not in any runbook); the shippable artifact is the KotrAI_*-namespaced crew
+# set — the operator runbook below, backed by the sweep-gated COMBINED. So "latest draft
+# suffix" (e.g. v0.54) is NOT "the thing that ships": surfacing this stops the next engine
+# pasting a standalone draft when the pipeline artifact is the actual deliverable. (Verified
+# 2026-06-18 claude-p: STAGED_COMBINED carries 16 KotrAI_* fns, 0 CAI_*; v0.5x.j drafts carry
+# CAI_* only — two distinct lineages, the exact "which is canonical" trap one axis over.)
+DRAFT_NS = "CAI_*"
+PIPELINE_NS = "KotrAI_*"
+PIPELINE_RUNBOOK = "~/Warcraft III/KOTR/_crew/companion_ai_APPLY_RUNBOOK.md"
+PIPELINE_ARTIFACT = "Systems_Migration/kotr/fix_specs/companion_ai_STAGED_COMBINED.j"
+PIPELINE_GATE = "verify_companion_ai_fidelity.py"
+
 
 def ver_of(path):
     """Version tag parsed from the filename: 'v0.54', or 'base' for the bare name."""
@@ -212,10 +226,22 @@ def classify(fps):
 
     latest = max(groups, key=ver_key)
     latest_fp = max(groups[latest], key=lambda f: f["mtime"])
+    latest_ns = latest_fp["ns"]
+    scope = ("latest DRAFT in this family" if latest_ns == DRAFT_NS
+             else "the current copy to cite")
     lines.append(
         f"LATEST version present: {latest} "
-        f"([{latest_fp['md5'][:8]}] {latest_fp['lines']}L {latest_fp['ns']}, "
-        f"{short(latest_fp['path'])}) — cite this, not a stale suffix.")
+        f"([{latest_fp['md5'][:8]}] {latest_fp['lines']}L {latest_ns}, "
+        f"{short(latest_fp['path'])}) — {scope}, not a stale suffix.")
+    # A CAI_* latest is a STANDALONE DRAFT, not the shippable artifact — say so plainly so
+    # "cite v0.54" is never misread as "v0.54 ships". (Lineage-axis trap: see module header.)
+    if latest_ns == DRAFT_NS:
+        lines.append(
+            f"NOTE — the {DRAFT_NS} `kotr_companion_ai_v*.j` family is the standalone "
+            f"hand-paste DRAFT lineage, NOT the deliverable. The companion AI that SHIPS is "
+            f"the {PIPELINE_NS} crew pipeline: runbook {PIPELINE_RUNBOOK}, backed by the "
+            f"sweep-gated {PIPELINE_ARTIFACT} ({PIPELINE_GATE}). So '{latest}' = latest draft "
+            f"suffix, not the shippable artifact — don't paste a v*.j draft over the pipeline.")
 
     code = 0
     if drifted:
@@ -307,6 +333,16 @@ def selftest():
     # 10. empty set -> nothing to reconcile (exit 3)
     code, _ = classify([])
     checks.append(("no copies => EXIT3", code == 3))
+
+    # 11. a CAI_* latest emits the standalone-draft-vs-pipeline lineage NOTE (the trap this
+    #     fix closes); a KotrAI_* latest does NOT (it's already pipeline-namespaced).
+    _, ls_cai = classify([fp_of("v0.54", "eee")])  # fp_of defaults ns="CAI_*"
+    checks.append(("CAI_* latest => pipeline NOTE",
+                   any(PIPELINE_NS in ln and PIPELINE_RUNBOOK in ln for ln in ls_cai)))
+    _, ls_kot = classify([{"ver": "v0.54", "md5": "fff", "footer": "OK", "mtime": 0.0,
+                           "lines": 1, "ns": PIPELINE_NS, "path": "/x/v0.54/fff.j"}])
+    checks.append(("KotrAI_* latest => no draft NOTE",
+                   not any("standalone" in ln for ln in ls_kot)))
 
     ok = sum(1 for _, c in checks if c)
     for name, c in checks:
