@@ -5,8 +5,8 @@ Built 2026-06-18 by KOTR Builder (engine claude-p).
 
 WHY (the gap this closes):
   The fix_specs/ regression sweep (verify_all.py, 178/178) guards the v0.50 PASTE SET —
-  it knows nothing about the eighteen standalone gates that live HERE in cli/builder. Those
-  eighteen each bind a different documentation SOURCE-OF-TRUTH (recon binders, apply-runbooks,
+  it knows nothing about the standalone gates that live HERE in cli/builder (count == the
+  GATES registry below). Each binds a different documentation SOURCE-OF-TRUTH (recon binders, apply-runbooks,
   per-phase build specs, the hero-select divergence catalog, the command-hub spec, the
   castleslot global contract, the localplayer-sync / desync2 link gates) BOTH WAYS against
   the live `_extract_v050/war3map.j`. Each was wired + cert'd one at a time and then run
@@ -63,6 +63,7 @@ GATES = [
     "verify_hero_select_divergence_catalog_anchors.py",
     "verify_hero_select_p2_generated_j.py",
     "verify_hero_select_p2_crew_vs_authority.py",
+    "verify_hero_select_p2_initcall_anchor.py",
     "verify_castleslot_global_contract.py",
     # --- command-hub spec + classwide localplayer alloc ---
     "verify_command_hub_spec_grounding.py",
