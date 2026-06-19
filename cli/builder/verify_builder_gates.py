@@ -73,6 +73,7 @@ GATES = [
     "verify_hero_select_p2_avail_anchor.py",
     "verify_hero_select_p2_spawnability_anchor.py",
     "verify_hero_select_p2_announce_anchor.py",
+    "verify_hero_select_p2_setplayername_anchor.py",
     "verify_castleslot_global_contract.py",
     # --- command-hub spec + classwide localplayer alloc ---
     "verify_command_hub_spec_grounding.py",
