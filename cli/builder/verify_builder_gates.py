@@ -42,7 +42,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 SELF = os.path.basename(__file__)
 
-# The eighteen standalone cli/builder gates, grouped by the source-of-truth each binds.
+# The standalone cli/builder gates, grouped by the source-of-truth each binds.
 GATES = [
     # --- hero-inventory track ---
     "verify_hero_inventory_phase0_recon_anchors.py",
@@ -70,6 +70,7 @@ GATES = [
     "verify_hero_select_p2_spawnloc_faceloc_anchor.py",
     "verify_hero_select_p2_allyrescueinvuln_anchor.py",
     "verify_hero_select_p2_item_loadout_anchor.py",
+    "verify_hero_select_p2_avail_anchor.py",
     "verify_castleslot_global_contract.py",
     # --- command-hub spec + classwide localplayer alloc ---
     "verify_command_hub_spec_grounding.py",
