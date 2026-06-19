@@ -65,6 +65,7 @@ GATES = [
     "verify_hero_select_p2_crew_vs_authority.py",
     "verify_hero_select_p2_initcall_anchor.py",
     "verify_hero_select_p2_step2_heroref_anchor.py",
+    "verify_hero_select_p2_merlin_extrashook_anchor.py",
     "verify_castleslot_global_contract.py",
     # --- command-hub spec + classwide localplayer alloc ---
     "verify_command_hub_spec_grounding.py",
